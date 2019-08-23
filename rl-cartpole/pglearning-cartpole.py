@@ -16,7 +16,7 @@ from tensorflow import set_random_seed
 
 
 class PgCartPoleSolver(CartPoleSolver):
-    def __init__( self, n_episodes = 10000, discount = 1.0, n_win_ticks =195, batch_size=25000, tau=20 ) :
+    def __init__( self, n_episodes = 10000, discount = 0.99 , n_win_ticks =195, batch_size=25000, tau=20 ) :
         CartPoleSolver.__init__(self, n_episodes,  discount,  n_win_ticks)
         self.tau = tau # number of episodes used to collect trajectories to estimate advatage estimate
         self.batch_size = batch_size
@@ -37,10 +37,10 @@ class PgCartPoleSolver(CartPoleSolver):
         
         inp = Input(shape=[self.STATE_DIM], name = "input_x")
         adv = Input(shape=[1], name = "advantage")
-        x = Dense(10)(inp)
+        x = Dense(32)(inp)
         x = BatchNormalization()(x)
         x = LeakyReLU()(x)
-        x = Dense(8)(x)
+        x = Dense(24)(x)
         x = BatchNormalization()(x)
         x = LeakyReLU()(x)
         out= Dense(self.ACTION_DIM, activation='softmax')(x)
@@ -135,6 +135,11 @@ class PgCartPoleSolver(CartPoleSolver):
         x = np.array(batch)
         x = np.squeeze(x, axis=1)
         return x
+    
+    def normalize( self, x ):
+        x -= np.mean(x)
+        x /= np.std(x)
+        return x
         
     def score_model( self, n_test_episodes):
          test_scores = deque(maxlen=n_test_episodes)
@@ -176,10 +181,13 @@ class PgCartPoleSolver(CartPoleSolver):
             
             if e > 0 and e % self.tau == 0:
                 adv_estimate = self.get_advatange_estimate(states_batch, discounted_rewards_batch)
+                adv_estimate =  self.normalize (adv_estimate)
                 x = self.prepare_batch(states_batch)
-                self.CriticNetwork.fit(x, np.array(discounted_rewards_batch), batch_size = len(states_batch), verbose =0 )
+                y = self.normalize(np.array(discounted_rewards_batch) )
+                self.CriticNetwork.fit(x,y , batch_size = len(states_batch), verbose =0 )
                 
                 y = self.prepare_batch(actions_batch)
+                
                 self.ActorNetwork_train.fit([x, adv_estimate], y, batch_size=len(x), verbose=0)
                 
                 self.reset_batch_variables(states_batch,actions_batch, discounted_rewards_batch )
@@ -187,7 +195,9 @@ class PgCartPoleSolver(CartPoleSolver):
 
             if  e> 0 and e % 100  == 0  :
                 mean_score = np.mean(scores)
+                print('*************************************************************************')
                 print (' Mean reward in last 100 episodes during training is {} after {} episodes'.format(mean_score,e+1) )
+                print (' Max reward in last 100 episodes during trainign is {}  after {} episodes'.format(np.max(scores),e+1))
                 test_score = self.score_model(10)
                 print (' Mean test score for 10 episodes is {} after {} episodes'.format(test_score,e+1) )
                 if test_score >= self.n_win_ticks:

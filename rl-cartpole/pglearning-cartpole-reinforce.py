@@ -2,31 +2,26 @@ import numpy as np
 from cartpolesolver import CartPoleSolver
 from collections import deque
 from keras.models import Model
-from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import Input
 from keras.layers import BatchNormalization
 from keras.layers import  LeakyReLU
 import keras.backend as K
 from keras.optimizers import Adam
-from keras.optimizers import SGD
-from tensorflow import set_random_seed
-
+#from keras.optimizers import SGD
 
 #https://gist.github.com/n1try/2a6722407117e4d668921fce53845432
 
 
 class PgCartPoleSolver(CartPoleSolver):
-    def __init__( self, n_episodes = 10000, discount = 1.0, n_win_ticks =195, batch_size=25000, tau=50 ) :
+    def __init__( self, n_episodes = 10000, discount = 1.0, n_win_ticks =195, batch_size=25000, tau=50) :
         CartPoleSolver.__init__(self, n_episodes,  discount,  n_win_ticks)
         self.tau = tau # number of episodes used to collect trajectories to estimate advatage estimate
         self.batch_size = batch_size
         self.STATE_DIM = 4
         self.ACTION_DIM = 2
         self.ActorNetwork_train, self.ActorNetwork_predict = self.create_policy_model();
-        np.random.seed(1)
-        set_random_seed(9)
-             
+    
     def pgloss( self, adv):
         def loss(y_true,y_pred):
             val =  K.categorical_crossentropy(y_true, y_pred) * adv 
@@ -37,6 +32,7 @@ class PgCartPoleSolver(CartPoleSolver):
         
         inp = Input(shape=[self.STATE_DIM], name = "input_x")
         adv = Input(shape=[1], name = "advantage")
+                
         x = Dense(10)(inp)
         x = BatchNormalization()(x)
         x = LeakyReLU()(x)
@@ -46,7 +42,7 @@ class PgCartPoleSolver(CartPoleSolver):
         out= Dense(self.ACTION_DIM, activation='softmax')(x)
         
         model_train = Model(inputs=[inp, adv], outputs=out)
-        model_train.compile(loss=self.pgloss(adv), optimizer=Adam(lr=1e-1))
+        model_train.compile(loss=self.pgloss(adv), optimizer=Adam(lr=1e-2))
         model_predict = Model(inputs=[inp], outputs=out)
         return model_train, model_predict
         
@@ -116,6 +112,11 @@ class PgCartPoleSolver(CartPoleSolver):
         x = np.squeeze(x, axis=1)
         return x
         
+    def normalize( self, x ):
+        x -= np.mean(x)
+        x /= np.std(x)
+        return x
+        
     def score_model( self, n_test_episodes):
          test_scores = deque(maxlen=n_test_episodes)
          test_scores.clear()
@@ -156,14 +157,17 @@ class PgCartPoleSolver(CartPoleSolver):
             
             if e > 0 and (e+1) % self.tau == 0:
                 x = self.prepare_batch(states_batch)
+                r = self.normalize(np.array(discounted_rewards_batch))
                 y = self.prepare_batch(actions_batch)
-                self.ActorNetwork_train.fit([x, np.array(discounted_rewards_batch)], y, verbose=0)
+                self.ActorNetwork_train.fit([x,r ], y, verbose=0)
                 self.reset_batch_variables(states_batch,actions_batch, discounted_rewards_batch )
                 
 
             if  e> 0 and (e+1) % 100  == 0  :
                 mean_score = np.mean(scores)
+                print('*************************************************************************')
                 print (' Mean reward in last 100 episodes during training is {} after {} episodes'.format(mean_score,e+1) )
+                print (' Max reward in last 100 episodes during trainign is {}  after {} episodes'.format(np.max(scores),e+1))
                 test_score = self.score_model(10)
                 print (' Mean test score for 10 episodes is {} after {} episodes'.format(test_score,e+1) )
                 if test_score >= self.n_win_ticks:
