@@ -4,17 +4,19 @@ from collections import deque
 from keras.models import Model
 from keras.layers import Dense
 from keras.layers import Input
+from keras.layers import Activation
 from keras.layers import BatchNormalization
 from keras.layers import  LeakyReLU
 import keras.backend as K
 from keras.optimizers import Adam
+import matplotlib.pyplot as plt
 #from keras.optimizers import SGD
 
 #https://gist.github.com/n1try/2a6722407117e4d668921fce53845432
 
 
 class PgCartPoleSolver(CartPoleSolver):
-    def __init__( self, n_episodes = 10000, discount = 1.0, n_win_ticks =195, batch_size=25000, tau=50) :
+    def __init__( self, n_episodes = 10000, discount = 0.99, n_win_ticks =195, batch_size=25000, tau=50) :
         CartPoleSolver.__init__(self, n_episodes,  discount,  n_win_ticks)
         self.tau = tau # number of episodes used to collect trajectories to estimate advatage estimate
         self.batch_size = batch_size
@@ -33,12 +35,13 @@ class PgCartPoleSolver(CartPoleSolver):
         inp = Input(shape=[self.STATE_DIM], name = "input_x")
         adv = Input(shape=[1], name = "advantage")
                 
-        x = Dense(10)(inp)
-        x = BatchNormalization()(x)
-        x = LeakyReLU()(x)
-        x = Dense(8)(x)
-        x = BatchNormalization()(x)
-        x = LeakyReLU()(x)
+        x = Dense(32, activation='tanh')(inp)
+        #x = BatchNormalization()(x)
+        #x = Activation(activation='tanh') (x)
+        #x = LeakyReLU()(x)
+        x = Dense(24, activation='relu')(x)
+        #x = BatchNormalization()(x)
+        #x = Activation(activation='relu') (x)
         out= Dense(self.ACTION_DIM, activation='softmax')(x)
         
         model_train = Model(inputs=[inp, adv], outputs=out)
@@ -112,10 +115,11 @@ class PgCartPoleSolver(CartPoleSolver):
         x = np.squeeze(x, axis=1)
         return x
         
-    def normalize( self, x ):
-        x -= np.mean(x)
-        x /= np.std(x)
-        return x
+    def normalize_batch( self, batch, data ):
+        mu = np.mean(data)
+        std = np.std(data)
+        batch -= mu
+        batch /= std
         
     def score_model( self, n_test_episodes):
          test_scores = deque(maxlen=n_test_episodes)
@@ -146,10 +150,13 @@ class PgCartPoleSolver(CartPoleSolver):
         discounted_rewards_batch  = deque(maxlen=self.batch_size)
         scores.clear()
         self.reset_batch_variables(states_batch,actions_batch, discounted_rewards_batch )
+        adv_estimate_data = np.empty(0).reshape(0,1)
+        scores_for_plot = deque(maxlen=self.n_episodes)
         
         solved = False
         for e in range( self.n_episodes ):
             tau_s, tau_discounted_rewards, tau_states, tau_actions = self.experience_trajectory( e )
+            scores_for_plot.append(tau_s)
             scores.append(tau_s)
             states_batch += tau_states
             actions_batch += tau_actions
@@ -157,9 +164,12 @@ class PgCartPoleSolver(CartPoleSolver):
             
             if e > 0 and (e+1) % self.tau == 0:
                 x = self.prepare_batch(states_batch)
-                r = self.normalize(np.array(discounted_rewards_batch))
+                r = np.array(discounted_rewards_batch).reshape(-1,1)
+                adv_estimate_data = np.vstack([adv_estimate_data, r] )
+                self.normalize_batch (r ,adv_estimate_data )
                 y = self.prepare_batch(actions_batch)
-                self.ActorNetwork_train.fit([x,r ], y, verbose=0)
+                hist = self.ActorNetwork_train.fit([x, r], y, verbose=0)
+                #train_loss.append(hist.history['loss'])
                 self.reset_batch_variables(states_batch,actions_batch, discounted_rewards_batch )
                 
 
@@ -177,6 +187,8 @@ class PgCartPoleSolver(CartPoleSolver):
         
         if not solved:
             print('Could not solve after {} episodes'.format(e+1))
+            
+        plt.plot(scores_for_plot)
             
        
 if __name__ == "__main__":
