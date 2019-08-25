@@ -197,7 +197,7 @@ class PgCartPoleSolver(CartPoleSolver):
                 self.reset_batch_variables(states_batch,actions_batch, discounted_rewards_batch )
 
 
-            if  e> 0 and e % 100  == 0  :
+            if  e> 0 and (e+1) % 100  == 0  :
                 mean_score = np.mean(scores)
                 print('*************************************************************************')
                 print (' Mean reward in last 100 episodes during training is {} after {} episodes'.format(mean_score,e+1) )

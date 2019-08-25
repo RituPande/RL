@@ -36,12 +36,7 @@ class PgCartPoleSolver(CartPoleSolver):
         adv = Input(shape=[1], name = "advantage")
                 
         x = Dense(32, activation='tanh')(inp)
-        #x = BatchNormalization()(x)
-        #x = Activation(activation='tanh') (x)
-        #x = LeakyReLU()(x)
         x = Dense(24, activation='relu')(x)
-        #x = BatchNormalization()(x)
-        #x = Activation(activation='relu') (x)
         out= Dense(self.ACTION_DIM, activation='softmax')(x)
         
         model_train = Model(inputs=[inp, adv], outputs=out)
