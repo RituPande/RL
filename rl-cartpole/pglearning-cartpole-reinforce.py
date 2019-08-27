@@ -9,6 +9,7 @@ from keras.layers import BatchNormalization
 from keras.layers import  LeakyReLU
 import keras.backend as K
 from keras.optimizers import Adam
+from keras.optimizers import RMSprop
 import matplotlib.pyplot as plt
 #from keras.optimizers import SGD
 
@@ -37,10 +38,12 @@ class PgCartPoleSolver(CartPoleSolver):
                 
         x = Dense(32, activation='tanh')(inp)
         x = Dense(24, activation='relu')(x)
+        x = Dense(12, activation='relu')(x)
+        x = Dense(4, activation='relu')(x)
         out= Dense(self.ACTION_DIM, activation='softmax')(x)
         
         model_train = Model(inputs=[inp, adv], outputs=out)
-        model_train.compile(loss=self.pgloss(adv), optimizer=Adam(lr=1e-2))
+        model_train.compile(loss=self.pgloss(adv), optimizer=RMSprop(lr=1e-3))
         model_predict = Model(inputs=[inp], outputs=out)
         return model_train, model_predict
         
@@ -184,11 +187,19 @@ class PgCartPoleSolver(CartPoleSolver):
             print('Could not solve after {} episodes'.format(e+1))
             
         plt.plot(scores_for_plot)
-            
+        return solved, test_score
        
 if __name__ == "__main__":
-    solver = PgCartPoleSolver()
-    solver.run()
+    
+    result_solved= []
+    result_scores=[]
+    for i in range(10):
+        solver = PgCartPoleSolver()
+        solved, test_score = solver.run()
+        result_solved.append(solved)
+        result_scores.append(test_score)
+    print('Number of Solutions:{}'.format(sum(result_solved)))
+    print(result_scores)
     del solver
         
 

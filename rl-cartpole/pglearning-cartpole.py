@@ -8,6 +8,7 @@ from keras.layers import Input
 from keras.layers import  LeakyReLU
 import keras.backend as K
 from keras.optimizers import Adam
+from keras.optimizers import RMSprop
 from keras.layers import BatchNormalization
 from tensorflow import set_random_seed
 import matplotlib.pyplot as plt
@@ -39,11 +40,7 @@ class PgCartPoleSolver(CartPoleSolver):
         inp = Input(shape=[self.STATE_DIM], name = "input_x")
         adv = Input(shape=[1], name = "advantage")
         x = Dense(32, activation='tanh')(inp)
-        #x = BatchNormalization()(x)
-        #x = LeakyReLU()(x)
         x = Dense(24, activation='relu')(x)
-        #x = BatchNormalization()(x)
-        #x = LeakyReLU()(x)
         out= Dense(self.ACTION_DIM, activation='softmax')(x)
         
         model_train = Model(inputs=[inp, adv], outputs=out)
@@ -212,11 +209,20 @@ class PgCartPoleSolver(CartPoleSolver):
         if not solved:
             print('Could not solve after {} episodes'.format(e+1))
         plt.plot(scores_for_plot)
+        return solved, test_score
             
        
 if __name__ == "__main__":
-    solver = PgCartPoleSolver()
-    solver.run()
+    result_solved= []
+    result_scores=[]
+    for i in range(10):
+        solver = PgCartPoleSolver()
+        solved, test_score = solver.run()
+        result_solved.append(solved)
+        result_scores.append(test_score)
+    print('Number of Solutions:{}'.format(sum(result_solved)))
+    print(result_scores)
+    
     del solver
         
 
